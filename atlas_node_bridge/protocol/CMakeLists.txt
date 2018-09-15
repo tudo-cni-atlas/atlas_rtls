@@ -1,0 +1,13 @@
+set(PROTOCOL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(PROTOCOL_INCLUDE_DIR ${PROTOCOL_INCLUDE_DIR} PARENT_SCOPE)
+
+if(TARGET protocol)
+	message("protocol is already defined")
+else()
+	include_directories(${catkin_INCLUDE_DIRS})
+	include_directories(${SERIAL_INCLUDE_DIR})
+	include_directories(${PROTOCOL_INCLUDE_DIR})
+	set(LIB_SRCS protocol.h protocol_structures.h protocol.cpp protocol_commands.cpp)
+	add_library(protocol STATIC ${LIB_SRCS})
+	target_link_libraries(protocol serial)
+endif()

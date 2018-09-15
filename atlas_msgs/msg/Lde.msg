@@ -1,0 +1,8 @@
+uint16 maxNoise
+uint16 firstPathAmp1
+uint16 stdNoise
+uint16 firstPathAmp2
+uint16 firstPathAmp3
+uint16 maxGrowthCIR
+uint16 rxPreamCount
+uint16 firstPath
