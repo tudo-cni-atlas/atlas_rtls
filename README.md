@@ -18,11 +18,6 @@ The source code of the localization is released under [BSD 3-Clause license](LIC
 
 The atlas_rtls package has been tested under [ROS] Kinetic and Ubuntu 16.04. This is research code, expect that it changes often and any fitness for a particular purpose is disclaimed.
 
-![Example image](doc/viz.jpg)
-
-### Publications
-
-This work is currently under review.
 
 ## Installation
 
@@ -55,6 +50,7 @@ To build from source, clone the latest version from this repository into your ca
 ## Usage
 
 Due to the numerous configuration files that are required to run the ATLAS RTLS, a seperate deployment-specific config repository is needed. An example is provided here:
+[Example config and raw data](https://github.com/tudo-cni-atlas/atlas_config_example/)
 
 
 ## Nodes
