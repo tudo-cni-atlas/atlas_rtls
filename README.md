@@ -4,6 +4,9 @@
 
 This is the ATLAS Real-Time Localization System (RTLS). ATLAS is based on ultra-wideband using the time-difference of arrival (TDOA) topology in which the mobile nodes transmit periodically and the infrastructure-based nodes are mostly passive.
 
+[![DOI](https://zenodo.org/badge/148909057.svg)](https://zenodo.org/badge/latestdoi/148909057)
+
+
 **Keywords:** 
 
 ### License
