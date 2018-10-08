@@ -49,7 +49,7 @@ To build from source, clone the latest version from this repository into your ca
 Due to the numerous configuration files that are required to run the ATLAS RTLS, a seperate deployment-specific config repository is needed. An example is provided here:
 [Example config and raw data](https://github.com/tudo-cni-atlas/atlas_config_example/)
 
-The required firmware will be provided in the near future.
+The firmware for the nodes will be provided upon completion of academic review.
 
 
 ## Nodes

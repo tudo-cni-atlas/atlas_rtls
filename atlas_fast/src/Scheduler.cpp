@@ -7,7 +7,7 @@
 //
 
 #include "atlas_fast/Scheduler.h"
-#include <atlas_package/tags_dynParamsConfig.h>
+#include <atlas_fast/tags_dynParamsConfig.h>
 #include <dynamic_reconfigure/server.h>
 
 uint8_t Scheduler::sync_period;
