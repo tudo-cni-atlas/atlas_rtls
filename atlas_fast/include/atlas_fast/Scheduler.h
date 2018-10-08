@@ -20,7 +20,7 @@
 #include <atlas_msgs/AssociationResponse.h>
 
 #include "ros/ros.h"
-#include <atlas_package/tags_dynParamsConfig.h>
+#include <atlas_fast/tags_dynParamsConfig.h>
 #include <dynamic_reconfigure/server.h>
 
 #define SUBFRAME_SLOTS (uint8_t) 16   // number of slots per subframe
