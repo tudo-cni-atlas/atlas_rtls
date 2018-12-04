@@ -100,13 +100,13 @@ private:
 
     void calculateRepetitions();
 
-    void getTagParam(atlas_package::tags_dynParamsConfig &config);
+    void getTagParam(atlas_fast::tags_dynParamsConfig &config);
 
     // dynamic reconfiguration parameters
-    dynamic_reconfigure::Server<atlas_package::tags_dynParamsConfig> *dynamic_reconfigure_server;
-    dynamic_reconfigure::Server<atlas_package::tags_dynParamsConfig>::CallbackType  dynamic_reconfigure_callback;
+    dynamic_reconfigure::Server<atlas_fast::tags_dynParamsConfig> *dynamic_reconfigure_server;
+    dynamic_reconfigure::Server<atlas_fast::tags_dynParamsConfig>::CallbackType  dynamic_reconfigure_callback;
 
-    static void dynamicReconfigureCallback (atlas_package::tags_dynParamsConfig &msg, uint32_t level, Tag* tag);
+    static void dynamicReconfigureCallback (atlas_fast::tags_dynParamsConfig &msg, uint32_t level, Tag* tag);
 
     friend class Scheduler;
 };

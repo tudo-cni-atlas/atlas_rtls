@@ -116,10 +116,10 @@ Tag::Tag(uint64_t tag_eui, uint64_t sanchor_eui)
 
     // Create a dynamic reconfiguration server and specify the callback
     //TODO: Add mutex
-    dynamic_reconfigure_server = new dynamic_reconfigure::Server<atlas_package::tags_dynParamsConfig> (n);
+    dynamic_reconfigure_server = new dynamic_reconfigure::Server<atlas_fast::tags_dynParamsConfig> (n);
     dynamic_reconfigure_callback =  boost::bind(&Tag::dynamicReconfigureCallback,  _1, _2, this);
 
-    atlas_package::tags_dynParamsConfig update_message;
+    atlas_fast::tags_dynParamsConfig update_message;
     dynamic_reconfigure_server->getConfigDefault(update_message);
 
     getTagParam(update_message);
@@ -140,7 +140,7 @@ Tag::~Tag()
     delete dynamic_reconfigure_server;
 }
 
-void Tag::getTagParam(atlas_package::tags_dynParamsConfig &update_message)
+void Tag::getTagParam(atlas_fast::tags_dynParamsConfig &update_message)
 {
     ros::NodeHandle n;
 
@@ -248,7 +248,7 @@ void Tag::getTagParam(atlas_package::tags_dynParamsConfig &update_message)
     }
 }
 
-void Tag::dynamicReconfigureCallback (atlas_package::tags_dynParamsConfig &msg, uint32_t level, Tag* tag)
+void Tag::dynamicReconfigureCallback (atlas_fast::tags_dynParamsConfig &msg, uint32_t level, Tag* tag)
 {
     ROS_INFO("Dynamic Reconfigure Callback: EUI: %lx\tPeriod: %d\tOffset: %d,\tRepetitions:%d\tAutoSchedule:%d\tEnable:%d", tag->eui, msg.period, msg.offset, msg.repetitions,
              msg.auto_schedule, msg.enable);
@@ -317,7 +317,7 @@ void Tag::disableTag(std::string error_message)
 {
     enable = false;
 
-    atlas_package::tags_dynParamsConfig update_message;
+    atlas_fast::tags_dynParamsConfig update_message;
     getTagParam(update_message);
     update_message.error_message = error_message;
     update_message.enable = false;
