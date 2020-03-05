@@ -441,17 +441,17 @@ bool PositionerTDOA::calculatePositionEKFInner(const sample_t &s, position_t *p)
     ekf.stateCovariance = Pk;
 
     // constrain min max
-    if(ekf.state[0]<m_minX) ekf.state[0]=m_minX;
-    if(ekf.state[1]<m_minY) ekf.state[1]=m_minY;
-    if(ekf.state[2]<m_minZ) ekf.state[2]=m_minZ;
-    if(ekf.state[0]>m_maxX) ekf.state[0]=m_maxX;
-    if(ekf.state[1]>m_maxY) ekf.state[1]=m_maxY;
-    if(ekf.state[2]>m_maxZ) ekf.state[2]=m_maxZ;
+    if(ekf.state[0]<m_minX) return false;
+    if(ekf.state[1]<m_minY) return false;
+    if(ekf.state[2]<m_minZ) return false;
+    if(ekf.state[0]>m_maxX) return false;
+    if(ekf.state[1]>m_maxY) return false;
+    if(ekf.state[2]>m_maxZ) return false;
 
     m_ekf[s.txeui] = ekf;
 
-    p->pos = xk.head(3);
-    p->dpos = xk.tail(3);
+    p->pos = ekf.state.head(3);
+    p->dpos = ekf.state.tail(3);
 
     return true;
 }
