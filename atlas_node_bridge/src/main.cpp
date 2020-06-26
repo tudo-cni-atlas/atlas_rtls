@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     std::cout << "Name: " << node_name << std::endl;
     std::cout << "Namespace: " << node_namespace << std::endl;
 
-    node_name.erase(0, node_namespace.size());
+    node_name.erase(0, node_namespace.size() + 1);
     uint64_t eui = std::stoull(node_name, nullptr, 16);
 
     std::cout << "After Erase_ " << node_name << std::endl;
