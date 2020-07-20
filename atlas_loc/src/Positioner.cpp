@@ -359,13 +359,21 @@ bool PositionerTDOA::calculatePositionEKFInner(const sample_t &s, position_t *p)
 
     // --- create dynamic process noise covariance matrix ---
     Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(3,3)*m_processNoise;
+    /* Checking if inverted
     Eigen::MatrixXd Ak(6,3);
     Ak << pow(interval,2)/2, 0, 0,
           0, pow(interval,2)/2, 0,
           0, 0, pow(interval,2)/2,
           interval, 0, 0,
           0, interval, 0,
-          0, 0, interval;
+          0, 0, interval; */
+    Eigen::MatrixXd Ak(6,3);
+    Ak << interval, 0, 0,
+          0, interval, 0,
+          0, 0, interval,
+          pow(interval,2)/2, 0, 0,
+          0, pow(interval,2)/2, 0,
+          0, 0, pow(interval,2)/2;
     Q = Ak * Q * Ak.transpose();
 
     if (m_dimensions == 2)
@@ -387,13 +395,10 @@ bool PositionerTDOA::calculatePositionEKFInner(const sample_t &s, position_t *p)
     // observation vector
     Eigen::VectorXd td = anchorTOAs;
     Eigen::VectorXd dv = td.tail(count - 1);
-
     Eigen::Vector3d ep = exk.head(3);
 
     Eigen::MatrixXd epmat = ep.transpose().replicate(count - 1, 1);
-
     Eigen::MatrixXd refmat = referenceAnchor.transpose().replicate(count - 1, 1);
-
     Eigen::MatrixXd anmat = anchorPositions.bottomRows(count - 1);
 
     Eigen::MatrixXd ta1 = epmat - anmat;

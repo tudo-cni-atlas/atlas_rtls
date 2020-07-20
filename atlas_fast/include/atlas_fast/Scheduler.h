@@ -126,6 +126,7 @@ private:
 
     uint8_t random_access_slots;            // number of random access slots
     uint8_t scheduled_access_slots;         // number of scheduled access slots
+    std::unordered_map<uint64_t, uint16_t> m_syncOffsets;
 
     static uint8_t sync_period;             // how frequently sync anchor sends a sync frame -> every 2^sync_period slots
     uint32_t ticks_per_slot;                // number of DW100 ticks per slot
