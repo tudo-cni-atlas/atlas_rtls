@@ -658,7 +658,7 @@ void Scheduler::scheduleTag(Tag *tag)
     associationResponse.offset = tag->offset;
 
     // Calculating the last transmission slot
-    uint64_t last_transmission_slot = next_sync_slot + tag->offset + (tag->repetitions - 1) * (1u << tag->transmission_period); //next_sync + offset + (reps - 1) * 2^per
+    uint64_t last_transmission_slot = next_sync_slot + corrected_offset + (tag->repetitions - 1) * (1u << tag->transmission_period); //next_sync + offset + (reps - 1) * 2^per
 
     bool normal_scheduling = tag->last_transmission_slot < next_sync_slot || tag->associating || !tag->auto_schedule || !tag->reliability;
 
