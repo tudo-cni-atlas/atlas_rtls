@@ -152,7 +152,7 @@ void Assembly::extractSamples(std::vector<sample_t> *samples)
             {
                 // go through
                 ros::Duration d = now - it_rxeui->second.hts;
-                if(d > ros::Duration(0.05))
+                if(d > ros::Duration(0.1))
                 {
                     dispatch = true;
                 }

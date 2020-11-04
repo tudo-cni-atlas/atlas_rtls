@@ -25,6 +25,9 @@ std::string sep = "\n----------------------------------------\n";
 Eigen::IOFormat HeavyFmt(Eigen::FullPrecision, 0, ", ", ";\n", "[", "]", "[", "]");
 //std::cout << sep << "ta1:" << sep << ta1.format(HeavyFmt) << sep;
 
+
+uint16_t discard_counter = 0;
+
 PositionerTDOA::PositionerTDOA ()
 {
 
@@ -446,17 +449,24 @@ bool PositionerTDOA::calculatePositionEKFInner(const sample_t &s, position_t *p)
     ekf.stateCovariance = Pk;
 
     // constrain min max
-    if(ekf.state[0]<m_minX) ekf.state[0]=m_minX;
-    if(ekf.state[1]<m_minY) ekf.state[1]=m_minY;
-    if(ekf.state[2]<m_minZ) ekf.state[2]=m_minZ;
-    if(ekf.state[0]>m_maxX) ekf.state[0]=m_maxX;
-    if(ekf.state[1]>m_maxY) ekf.state[1]=m_maxY;
-    if(ekf.state[2]>m_maxZ) ekf.state[2]=m_maxZ;
+    /*if(ekf.state[0]<m_minX) ekf.state[0]=m_minX; return false;
+    if(ekf.state[1]<m_minY) ekf.state[1]=m_minY; return false;
+    if(ekf.state[2]<m_minZ) ekf.state[2]=m_minZ; return false;
+    if(ekf.state[0]>m_maxX) ekf.state[0]=m_maxX; return false;
+    if(ekf.state[1]>m_maxY) ekf.state[1]=m_maxY; return false;
+    if(ekf.state[2]>m_maxZ) ekf.state[2]=m_maxZ; return false;
+*/
+    if(ekf.state[0]<m_minX) return false;
+    if(ekf.state[1]<m_minY) return false;
+    if(ekf.state[2]<m_minZ) return false;
+    if(ekf.state[0]>m_maxX) return false;
+    if(ekf.state[1]>m_maxY) return false;
+    if(ekf.state[2]>m_maxZ) return false;
 
     m_ekf[s.txeui] = ekf;
 
-    p->pos = xk.head(3);
-    p->dpos = xk.tail(3);
+    p->pos =  ekf.state.head(3);
+    p->dpos = ekf.state.tail(3);
 
     return true;
 }
@@ -472,7 +482,7 @@ bool PositionerTDOA::calculatePositionEKF(const sample_t &s, position_t *p)
     }
 
     // reinitialize when diverging
-    double threshold = 300;
+    double threshold = 100;
     if(m_ekf[s.txeui].state.head(3).norm() > threshold)
     {
         ROS_WARN(" Norm: %.2f greater threshold, reinit EKF !!!", threshold);
@@ -529,6 +539,19 @@ bool PositionerTDOA::calculatePositionEKF(const sample_t &s, position_t *p)
         if(!calculatePositionEKFInner(s, p))
         {
             discard = true;
+            discard_counter++;
+
+            if (discard_counter > 32)
+            {
+                ROS_WARN(" Discard counter exceeded, reinit EKF !!!");
+                createNewEKF(s.txeui, s.hts);
+                discard_counter = 0;
+                return false;
+            }
+        }
+        else
+        {
+            discard_counter = 0;
         }
     }
 
