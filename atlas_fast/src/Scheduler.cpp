@@ -441,6 +441,16 @@ Scheduler::Scheduler(ros::NodeHandle& n)
                     {
                         ROS_ERROR("PARAM FAILED to get 'randomAccessSlots'");
                     }
+                    if (n.getParam("/atlas/anchor/" + eui_string +"/tdoaSyncOffset", param))
+                    {
+                        uint16_t tdoaSyncOffset = (uint8_t) param;
+                        m_syncOffsets.insert(std::make_pair(eui, tdoaSyncOffset));
+                        ROS_INFO("PARAM tdoaSyncOffset: %d", random_access_slots);
+                    }
+                    else
+                    {
+                        ROS_ERROR("PARAM FAILED to get 'tdoaSyncOffset'");
+                    }
                     continue;
                 }
             }
@@ -603,7 +613,10 @@ void Scheduler::toaCallback(const atlas_msgs::Toa &msg)
                     it->second->associating = true;
 
                     if (it->second->enable)
+                    {
+                        it->second->sanchor_eui = msg.rxId;
                         scheduleTag(it->second);
+                    }
                 }
                 else if (current_sync_slot > it->second->last_transmission_slot)
                 {
@@ -613,9 +626,11 @@ void Scheduler::toaCallback(const atlas_msgs::Toa &msg)
                 {
                     it->second->associating = false;
 
-                    if (msg_offset != (it->second->offset  % SUBFRAME_SLOTS))
+                    uint16_t corrected_offset = it->second->offset + m_syncOffsets[msg.rxId];
+
+                    if (msg_offset != (corrected_offset  % SUBFRAME_SLOTS))
                     {
-                        ROS_WARN("Received message offset is: %d. It should be: %d", msg_offset, (it->second->offset % SUBFRAME_SLOTS));
+                        ROS_WARN("Received message offset is: %d. It should be: %d", msg_offset, (corrected_offset % SUBFRAME_SLOTS));
                     }
                 }
             }
@@ -636,11 +651,14 @@ void Scheduler::scheduleTag(Tag *tag)
     associationResponse.eui = tag->eui;
     associationResponse.period = tag->transmission_period;
     associationResponse.reliability = tag->reliability;
-    associationResponse.offset = tag->offset;
+    //associationResponse.offset = tag->offset;
     associationResponse.repetitions = tag->repetitions ;
 
+    uint16_t corrected_offset = tag->offset - m_syncOffsets[tag->sanchor_eui];
+    associationResponse.offset = tag->offset;
+
     // Calculating the last transmission slot
-    uint64_t last_transmission_slot = next_sync_slot + tag->offset + (tag->repetitions - 1) * (1u << tag->transmission_period); //next_sync + offset + (reps - 1) * 2^per
+    uint64_t last_transmission_slot = next_sync_slot + corrected_offset + (tag->repetitions - 1) * (1u << tag->transmission_period); //next_sync + offset + (reps - 1) * 2^per
 
     bool normal_scheduling = tag->last_transmission_slot < next_sync_slot || tag->associating || !tag->auto_schedule || !tag->reliability;
 

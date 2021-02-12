@@ -398,13 +398,10 @@ bool PositionerTDOA::calculatePositionEKFInner(const sample_t &s, position_t *p)
     // observation vector
     Eigen::VectorXd td = anchorTOAs;
     Eigen::VectorXd dv = td.tail(count - 1);
-
     Eigen::Vector3d ep = exk.head(3);
 
     Eigen::MatrixXd epmat = ep.transpose().replicate(count - 1, 1);
-
     Eigen::MatrixXd refmat = referenceAnchor.transpose().replicate(count - 1, 1);
-
     Eigen::MatrixXd anmat = anchorPositions.bottomRows(count - 1);
 
     Eigen::MatrixXd ta1 = epmat - anmat;
@@ -452,6 +449,8 @@ bool PositionerTDOA::calculatePositionEKFInner(const sample_t &s, position_t *p)
     ekf.stateCovariance = Pk;
 
     // constrain min max
+<<<<<<< HEAD
+=======
     /*if(ekf.state[0]<m_minX) ekf.state[0]=m_minX; return false;
     if(ekf.state[1]<m_minY) ekf.state[1]=m_minY; return false;
     if(ekf.state[2]<m_minZ) ekf.state[2]=m_minZ; return false;
@@ -459,6 +458,7 @@ bool PositionerTDOA::calculatePositionEKFInner(const sample_t &s, position_t *p)
     if(ekf.state[1]>m_maxY) ekf.state[1]=m_maxY; return false;
     if(ekf.state[2]>m_maxZ) ekf.state[2]=m_maxZ; return false;
 */
+>>>>>>> origin/master
     if(ekf.state[0]<m_minX) return false;
     if(ekf.state[1]<m_minY) return false;
     if(ekf.state[2]<m_minZ) return false;
@@ -468,7 +468,11 @@ bool PositionerTDOA::calculatePositionEKFInner(const sample_t &s, position_t *p)
 
     m_ekf[s.txeui] = ekf;
 
+<<<<<<< HEAD
+    p->pos = ekf.state.head(3);
+=======
     p->pos =  ekf.state.head(3);
+>>>>>>> origin/master
     p->dpos = ekf.state.tail(3);
 
     return true;
