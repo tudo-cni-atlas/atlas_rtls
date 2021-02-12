@@ -9,14 +9,21 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <vector>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <cmath>
+#include <queue>
+#include <numeric>
 
 #include "atlas_core/atlas_types.h"
 #include "atlas_core/ClockCorrection.h"
 
 #include <atlas_msgs/Trim.h>
+
+typedef std::pair< double, int > pdi;
+typedef std::pair< int, double > pid;
 
 
 ClockModel::ClockModel ()
@@ -60,6 +67,138 @@ double ClockModel::getCorrectedTOA(double toa) const
     return corrected;
 }
 
+double ClockModel::getVarianceDev(double toa, double ref)
+{
+    //compute sync error
+    double ctoa = toa - m_lastOffset - m_lastDrift*(toa-m_lastSync);
+    double dev = ctoa - ref;
+
+    if(dev != 0)
+    {
+        m_que.push_back(dev);
+    }
+
+    //get variance of defined sample size
+    double sum = std::accumulate(std::begin(m_que), std::end(m_que), 0.0);
+    double mean = sum / m_que.size();
+    double accum = 0; 
+
+    std::for_each(std::begin(m_que), std::end(m_que), [&](const double d){
+        accum += (d-mean)*(d-mean);
+    });
+
+    double varDev = accum / (m_que.size()-1);
+
+    if (m_que.size() == SAMPLE_SIZE){
+        m_que.pop_front();
+    }
+
+    //return variance
+    if(varDev > 0)
+    {
+      return varDev;
+    }
+    else
+    {
+       double k = 1.0;
+       return k;
+    }    
+}
+
+void ClockCorrection::findBestPath(int start){
+    //create adjacency list of sync graph
+    std::vector<pid> adj[100];
+
+    int count = sqrt(m_SyncGraph.size());
+
+    for(int i = 0; i < count; i++)
+    {
+        for(int j = 0; j < count; j++)
+        {
+            if(i!=j)
+            {
+                adj[i].push_back(pid(j, m_SyncGraph(i,j)));
+                //m_SyncGraph(i,j) = 1.0;
+            }
+            else
+            {
+                adj[i].push_back(pid(j, 0));
+            }
+        }
+    }
+
+    //compute shortest distance to defined reference sync master (Dijkstra's algorithm)
+    int numVert = seuis.size();
+    double d[numVert];
+    int parent[numVert];
+
+    std::priority_queue<pdi, std::vector<pdi>, std::greater <pdi> > Q;
+
+    for (int i = 0; i < numVert; i++)
+    {
+        d[i] = 1.0;
+        parent[i] = -1;
+    }
+
+    Q.push(pdi(0, start));
+    d[start] = 0;
+
+    while(!Q.empty()) 
+    {
+        int u = Q.top().second;
+        double c = Q.top().first;
+        Q.pop();
+
+        if(d[u] < c) 
+        {
+            continue;
+        }
+
+        for(int i=0; i < adj[u].size(); i++)
+        {
+            int v = adj[u][i].first;
+            double w = adj[u][i].second;
+
+            if(d[v] > d[u] + w) 
+            {
+                d[v] = d[u] + w;
+                parent[v] = u;
+                Q.push(pdi(d[v], v));
+            }
+        }
+    }
+
+    //get vertices of shortest sync path for each anchor to its respective reference sync anchor & update paths
+    for (int i = 0; i < numVert; i++)
+    {
+        if(std::find(m_masterSlaveAssign[m_verticeEui[start]].begin(), m_masterSlaveAssign[m_verticeEui[start]].end(), 
+                    m_verticeEui[i])!= m_masterSlaveAssign[m_verticeEui[start]].end())
+        {
+            //std::cout << std::hex << m_verticeEui[i] << "[.................]" << std::setprecision (std::numeric_limits<long double>::digits10 + 1) << d[i] << std::endl;
+            std::vector<uint64_t> path;
+            getBestPath(parent, i, path);
+
+            if(i != start)
+            {
+                path.erase(path.begin());
+                m_anchorPaths.at(m_verticeEui[i]) = path;
+            }
+        }
+    }
+}
+
+void ClockCorrection::getBestPath(int parent[], int j, std::vector<uint64_t> &path)
+{
+    if (parent[j] == -1)
+    {
+        path.push_back(m_verticeEui[j]);
+        return;
+    }
+    
+    path.push_back(m_verticeEui[j]);
+    getBestPath(parent, parent[j], path);
+}
+
 double ClockModel::getLastOffset() const
 {
     return m_lastOffset;
@@ -90,12 +229,15 @@ void ClockCorrection::initialize(ros::NodeHandle n)
 {
     ROS_INFO("Initializing Clock Correction...");
 
-    std::map<uint64_t, uint64_t> seuis;
+    //std::map<uint64_t, uint64_t> seuis;
     std::map<uint64_t, uint8_t> xtalts;
 
     XmlRpc::XmlRpcValue anchors;
     n.getParam("/atlas/anchor", anchors);
     ROS_ASSERT(anchors.getType() == XmlRpc::XmlRpcValue::TypeStruct);
+
+    double count;
+
     for (XmlRpc::XmlRpcValue::ValueStruct::const_iterator it = anchors.begin(); it != anchors.end(); ++it)
     {
         ROS_INFO("Found anchor %s", (it->first).c_str());
@@ -114,11 +256,15 @@ void ClockCorrection::initialize(ros::NodeHandle n)
         int xtalt;
         n.getParam("/atlas/anchor/" + it->first + "/xtalt", xtalt);
         xtalts.insert(std::pair<uint64_t, uint8_t>(eui, xtalt));
+
+        count++;
     }
 
     ROS_INFO(" Building Anchor Tree...");
     for (auto it = seuis.begin(); it != seuis.end(); ++it)
     {
+        m_verticeEui.push_back(it->first);
+
         if (m_anchorClocks.find(it->second) == m_anchorClocks.end())
         {
             std::map<uint64_t, ClockModel> m;
@@ -126,7 +272,15 @@ void ClockCorrection::initialize(ros::NodeHandle n)
         }
         if (it->first == it->second)
         {
-            m_fastSyncMasterEUI = it->first;
+            //get reference sync masters
+            m_fastSyncMasterEUI.push_back(it->first);
+            auto itr = std::find(m_verticeEui.begin(), m_verticeEui.end(), it->first);
+            m_syncMasterVertice = std::distance(m_verticeEui.begin(), itr);
+            std::cout << "Tree root: " << std::hex << it->first << "..."<< std::endl;
+
+            //assign each anchor to its respective reference sync master
+            std::vector<uint64_t> v;
+            m_masterSlaveAssign.insert(std::make_pair(it->first, v));
         }
         else
         {
@@ -146,6 +300,7 @@ void ClockCorrection::initialize(ros::NodeHandle n)
     }
 
     ROS_INFO(" Clock Correction Pathfinder");
+    m_lastPathUpdate = ros::Time::now();
     for (auto it = seuis.begin(); it != seuis.end(); ++it)
     {
         bool found = false;
@@ -164,8 +319,9 @@ void ClockCorrection::initialize(ros::NodeHandle n)
                 {
                     m_anchorPaths[it->first].push_back(jt->first);
                     hop = jt->first;
-                    if (hop == m_fastSyncMasterEUI)
+                    if (std::find(m_fastSyncMasterEUI.begin(), m_fastSyncMasterEUI.end(), hop) != m_fastSyncMasterEUI.end())
                     {
+                        m_masterSlaveAssign[jt->first].push_back(it->first);
                         ROS_INFO(" - %#lx hops %lu", it->first, m_anchorPaths[it->first].size());
                         found = true;
                         break;
@@ -178,6 +334,18 @@ void ClockCorrection::initialize(ros::NodeHandle n)
             }
         }
     }
+
+    n.getParam("/atlas/dbld", m_dbld);
+
+    if(m_dbld == true){
+        ROS_INFO("Best Link Discovery Initialized");
+        m_pathSet=false;
+        m_startTimeSet=false;
+
+        //initialize sync graph
+        m_SyncGraph.setOnes(count, count);
+    }
+
 
     ROS_INFO(" Initializing Trimming Publishers...");
     m_lastTrim = ros::Time::now();
@@ -195,6 +363,12 @@ void ClockCorrection::initialize(ros::NodeHandle n)
 
 void ClockCorrection::processSample(sample_t sample)
 {
+    if(m_startTimeSet == false)
+    {
+        m_startTime = ros::Time::now();
+        m_startTimeSet = true;
+    }
+
     //ROS_DEBUG(" Processing sample size %ld, seq %lld, txeui %#llx", (unsigned long)sample.meas.size(), (unsigned long long)sample.seq, (unsigned long long)sample.txeui);
     // Check if message is from designated sync anchor
     if(m_anchorClocks.find(sample.txeui) != m_anchorClocks.end())
@@ -206,14 +380,41 @@ void ClockCorrection::processSample(sample_t sample)
 
         for (auto it = sample.meas.begin(); it != sample.meas.end(); ++it)
         {
-            // Check if measurement is done by anchor in slave set (only then we need to use sync frame)
-            if(m_anchorClocks[sample.txeui].find(it->first) != m_anchorClocks[sample.txeui].end())
+            if(m_dbld==true)
             {
-                // Process synchronization frame at the receiving slave sync anchor
                 double toa = (double)it->second.ts / TICKS_PER_SECOND;
+                double varDev = m_anchorClocks[sample.txeui][it->first].getVarianceDev(toa,ref);
 
-                //ROS_DEBUG(" - %#lx toa %f, ref %f", it->first, toa, ref);
+                ROS_DEBUG(" - %#lx toa %f, ref %f", it->first, toa, ref);
+
                 m_anchorClocks[sample.txeui][it->first].processSynchronizationFrame(toa, ref);
+
+                //create sync graph
+                auto itr_i = std::find(m_verticeEui.begin(), m_verticeEui.end(), sample.txeui);
+                int idx_i = std::distance(m_verticeEui.begin(), itr_i);
+                auto itr_j = std::find(m_verticeEui.begin(), m_verticeEui.end(), it->first);
+                int idx_j = std::distance(m_verticeEui.begin(), itr_j);
+                
+                    if(idx_i!=idx_j)
+                    {
+                        m_SyncGraph(idx_i, idx_j) = varDev;
+                    }
+                    else
+                    {
+                        m_SyncGraph(idx_i, idx_j) = 0;
+                    }
+            }
+            else
+            {
+                // Check if measurement is done by anchor in slave set (only then we need to use sync frame)
+                if(m_anchorClocks[sample.txeui].find(it->first) != m_anchorClocks[sample.txeui].end())
+                {
+                    // Process synchronization frame at the receiving slave sync anchor
+                    double toa = (double)it->second.ts / TICKS_PER_SECOND;
+
+                    //ROS_DEBUG(" - %#lx toa %f, ref %f", it->first, toa, ref);
+                    m_anchorClocks[sample.txeui][it->first].processSynchronizationFrame(toa, ref);
+                }
             }
         }
     }
@@ -221,6 +422,33 @@ void ClockCorrection::processSample(sample_t sample)
     else
     {
         ROS_INFO(" Processing sample size %lu, seq %lu, txeui %#lx", sample.meas.size(), sample.seq, sample.txeui);
+        if(m_dbld==true)
+        {
+            ros::Duration dp = ros::Time::now() - m_lastPathUpdate;
+            ros::Duration ds = ros::Time::now() - m_startTime;
+            ros::Duration tp(UPDATE_PATH_INTERVAL);
+            ros::Duration ts(START_UPDATE_PATH);
+
+            if(((dp > tp) && (ds > ts)) && (m_pathSet==false))
+            {
+                for(int i = 0; i < m_fastSyncMasterEUI.size(); i++){
+                    auto itr = std::find(m_verticeEui.begin(), m_verticeEui.end(), m_fastSyncMasterEUI[i]);
+                    m_syncMasterVertice = std::distance(m_verticeEui.begin(), itr);
+                    findBestPath(m_syncMasterVertice);
+                }
+
+                m_lastPathUpdate = ros::Time::now();
+
+                for (auto it = seuis.begin(); it != seuis.end(); ++it){
+                    ROS_INFO(" - %#lx hops %lu", it->first, m_anchorPaths[it->first].size());
+                    //ROS_INFO(" - %#lx clockcount %lu", it->first, m_anchorClocks[it->second].size());
+                    for (int i = 0; i<m_anchorPaths[it->first].size(); i++){
+                        std::cout << m_anchorPaths[it->first][i] << std::endl;
+                    }
+                }
+                m_pathSet=true;
+            }
+        }
 
         for (auto it = sample.meas.begin(); it != sample.meas.end();)
         {
@@ -268,17 +496,30 @@ void ClockCorrection::processSample(sample_t sample)
 
         // Extracting TDOA from TOAs
         int row = 0;
-        double firstTOA = 0.0;
+        //double firstTOA = 0.0;
+
+        std::map<uint64_t, double> firstTOA; //firstTOA for specific tree root
+
         for (auto it = sample.meas.begin(); it != sample.meas.end(); ++it)
         {
-            if(row == 0)
-            {
-                firstTOA = it->second.toa;
-            }
-            it->second.toa = (it->second.toa - firstTOA) * 299792458.0;
-            row++;
-        }
+            uint64_t tree_root;
 
+            if(m_anchorPaths[it->first].size()==0)
+            {
+                tree_root = it->first;
+            }
+            else
+            {
+                tree_root = m_anchorPaths[it->first].back();
+            }
+
+            if(firstTOA.find(tree_root) == firstTOA.end())
+            {
+                firstTOA.insert(std::make_pair(tree_root, it->second.toa));
+            }
+
+            it->second.toa = (it->second.toa - firstTOA.at(tree_root)) * 299792458.0;
+        }
         m_samples.push_back(sample);
     }
 

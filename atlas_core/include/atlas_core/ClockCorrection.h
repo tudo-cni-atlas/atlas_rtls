@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <vector>
 #include <map>
+#include <deque>
 
 #include "atlas_core/atlas_types.h"
 
@@ -25,6 +26,11 @@ private:
     double m_lastDrift;
     ros::Time m_lastUpdate;
 
+    //getVariance
+    std::deque<double> m_que;
+    ros::Time m_lastVarUpdate;
+    const int SAMPLE_SIZE = 160; 
+
 public:
     ClockModel();
     ~ClockModel();
@@ -34,6 +40,9 @@ public:
     double getLastOffset() const;
     double getLastDrift() const;
     ros::Time getLastUpdate() const;
+
+    // Dynamic Best Link Discovery
+    double getVarianceDev(double toa, double ref);
 };
 
 class ClockCorrection
@@ -42,11 +51,27 @@ private:
     // anchor clock correction
     const uint64_t TICKS_PER_SECOND = 128 * 499.2e6;
     const double SYNC_TIMEOUT = 0.4;
-    uint64_t m_fastSyncMasterEUI;
+    std::vector<uint64_t> m_fastSyncMasterEUI;
+    std::map<uint64_t, std::vector<uint64_t> > m_masterSlaveAssign;
     std::map<uint64_t, std::map<uint64_t, ClockModel> > m_anchorClocks;
     std::map<uint64_t, std::vector<uint64_t> > m_anchorPaths;
     std::map<uint64_t, Eigen::Vector3d> m_anchorPositions;
     std::vector<sample_t> m_samples;
+
+    std::map<uint64_t, uint64_t> seuis;
+
+    // Dynamic Best Link Discovery
+    bool m_dbld;
+    double m_varDev;
+    int m_syncMasterVertice;
+    std::vector<uint64_t> m_verticeEui;
+    const double START_UPDATE_PATH = 15;
+    const double UPDATE_PATH_INTERVAL = 1;
+    ros::Time m_lastPathUpdate;
+    Eigen::MatrixXd m_SyncGraph;
+    bool m_pathSet;
+    bool m_startTimeSet;
+    ros::Time m_startTime;
 
     // trimming
     const double TRIM_INTERVAL = 10.0;
@@ -62,6 +87,9 @@ public:
     void processSample(sample_t sample);
     void processSamples(std::vector<sample_t> *samples);
     std::vector<sample_t> getCorrectedSamples();
+
+    void findBestPath(int txvert);
+    void getBestPath(int parent[], int j, std::vector<uint64_t> &path);
 };
 
 
