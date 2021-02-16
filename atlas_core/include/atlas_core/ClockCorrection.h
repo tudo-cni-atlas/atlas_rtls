@@ -29,7 +29,7 @@ private:
     //getVariance
     std::deque<double> m_que;
     ros::Time m_lastVarUpdate;
-    const int SAMPLE_SIZE = 160; 
+    const int SAMPLE_SIZE = 160;
 
 public:
     ClockModel();
