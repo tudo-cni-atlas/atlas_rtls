@@ -30,7 +30,7 @@ void signal_handler(int signal)
 int main(int argc, char **argv)
 {
     std::signal(SIGINT, signal_handler);
-
+    
     ros::init(argc, argv, "atlas");
 
     ros::NodeHandle n("~");
@@ -42,6 +42,9 @@ int main(int argc, char **argv)
     PositionerTDOA pos;
     pos.initialize(n);
 
+    bool pzs;
+    n.getParam("pzs", pzs);
+
     while (ros::ok())
     {
         std::vector<sample_t> s;
@@ -51,9 +54,19 @@ int main(int argc, char **argv)
         {
             sample_t s = *it;
             position_t p;
-            if(pos.calculatePositionEKF(s, &p))
+            if(pzs)
             {
-                rep.reportPosition(p);
+                if(pos.calculatePositionEKFZoning(s, &p))
+                {
+                    rep.reportPosition(p);
+                }
+            }
+            else
+            {
+                if(pos.calculatePositionEKF(s, &p))
+                {
+                    rep.reportPosition(p);
+                }
             }
         }
 

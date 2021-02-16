@@ -70,6 +70,16 @@ private:
     std::deque<sample_t> m_samples;
     std::map<uint64_t, ros::Subscriber> m_subSample;
     void sampleCallback(const atlas_msgs::Sample& msg);
+    
+    //Predictive Zone Selection
+    bool m_pzs;
+    std::vector<std::vector<uint64_t>> m_cellAnchors;
+    Eigen::MatrixXd m_zoneBounds;
+    Eigen::MatrixXd m_zoneCenters;
+    int m_cellsPerZone;
+
+    std::map<uint64_t, std::vector<uint64_t>> m_anchorsInZone;
+    //std::vector<vector<uint64_t>> anchorsInZone;
 
 public:
     PositionerTDOA ();
@@ -81,6 +91,10 @@ public:
     bool calculatePositionEKFInner(const sample_t &s, position_t *p);
     bool calculatePositionEKFConstraints(const sample_t &s, position_t *p);
     bool calculatePositionEKF(const sample_t &s, position_t *p);
+
+    //Predictive Zone Selection
+    bool calculatePositionEKFInnerZoning(const sample_t &s, position_t *p, int count);
+    bool calculatePositionEKFZoning(const sample_t &s, position_t *p);
 };
 
 #endif /* defined(__atlas__tdoa__) */
