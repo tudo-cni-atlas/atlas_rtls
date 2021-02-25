@@ -109,7 +109,7 @@ void ClockCorrection::findBestPath(int start){
     //create adjacency list of sync graph
     std::vector<pid> adj[100];
 
-    int count = sqrt(m_SyncGraph.size());
+    int count = sqrt(m_syncGraph.size());
 
     for(int i = 0; i < count; i++)
     {
@@ -117,8 +117,8 @@ void ClockCorrection::findBestPath(int start){
         {
             if(i!=j)
             {
-                adj[i].push_back(pid(j, m_SyncGraph(i,j)));
-                //m_SyncGraph(i,j) = 1.0;
+                adj[i].push_back(pid(j, m_syncGraph(i,j)));
+                //m_syncGraph(i,j) = 1.0;
             }
             else
             {
@@ -343,7 +343,7 @@ void ClockCorrection::initialize(ros::NodeHandle n)
         m_startTimeSet=false;
 
         //initialize sync graph
-        m_SyncGraph.setOnes(count, count);
+        m_syncGraph.setOnes(count, count);
     }
 
 
@@ -397,11 +397,11 @@ void ClockCorrection::processSample(sample_t sample)
                 
                     if(idx_i!=idx_j)
                     {
-                        m_SyncGraph(idx_i, idx_j) = varDev;
+                        m_syncGraph(idx_i, idx_j) = varDev;
                     }
                     else
                     {
-                        m_SyncGraph(idx_i, idx_j) = 0;
+                        m_syncGraph(idx_i, idx_j) = 0;
                     }
             }
             else
@@ -421,15 +421,15 @@ void ClockCorrection::processSample(sample_t sample)
     // Correct TOA message from positioning node
     else
     {
-        ROS_INFO(" Processing sample size %lu, seq %lu, txeui %#lx", sample.meas.size(), sample.seq, sample.txeui);
+        //ROS_INFO(" Processing sample size %lu, seq %lu, txeui %#lx", sample.meas.size(), sample.seq, sample.txeui);
         if(m_dbld==true)
         {
-            ros::Duration dp = ros::Time::now() - m_lastPathUpdate;
+            //ros::Duration dp = ros::Time::now() - m_lastPathUpdate;
             ros::Duration ds = ros::Time::now() - m_startTime;
-            ros::Duration tp(UPDATE_PATH_INTERVAL);
+            //ros::Duration tp(UPDATE_PATH_INTERVAL);
             ros::Duration ts(START_UPDATE_PATH);
 
-            if(((dp > tp) && (ds > ts)) && (m_pathSet==false))
+            if((ds > ts) && (m_pathSet==false))
             {
                 for(int i = 0; i < m_fastSyncMasterEUI.size(); i++){
                     auto itr = std::find(m_verticeEui.begin(), m_verticeEui.end(), m_fastSyncMasterEUI[i]);

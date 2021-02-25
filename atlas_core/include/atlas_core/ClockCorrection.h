@@ -66,9 +66,8 @@ private:
     int m_syncMasterVertice;
     std::vector<uint64_t> m_verticeEui;
     const double START_UPDATE_PATH = 15;
-    const double UPDATE_PATH_INTERVAL = 1;
     ros::Time m_lastPathUpdate;
-    Eigen::MatrixXd m_SyncGraph;
+    Eigen::MatrixXd m_syncGraph;
     bool m_pathSet;
     bool m_startTimeSet;
     ros::Time m_startTime;
