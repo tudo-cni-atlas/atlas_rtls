@@ -651,7 +651,7 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
     Eigen::MatrixXd anchorPositions(count, 3);
     Eigen::VectorXd anchorTOAs(count);
 
-    // extracting the tdoa from slected anchors only, choose reference TOA
+    // extracting the tdoa from selected anchors only, choose reference TOA
     int row = 0;
     double referenceTOA;
 
@@ -669,8 +669,6 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
             row++;
         }
     }
-
-    //std::cout << row << std::endl;
 
     // --- get the last interval ---
     double interval = m_initialInterval;
@@ -834,9 +832,7 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
     }
 
     Eigen::Vector3d ppos;
-    ppos(0) = p->pos(0) + p->dpos(0)*interval;
-    ppos(1) = p->pos(1) + p->dpos(1)*interval;
-    ppos(2) = p->pos(2) + p->dpos(2)*interval;
+    ppos = m_lastPosition[s.txeui].pos + m_lastPosition[s.txeui].dpos*interval;
 
     int cellNumber = m_zoneBounds.size()/6;
     bool isInLocArea = false;
@@ -910,6 +906,7 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
             }
         }
     }
+
     m_anchorsInZone.find(s.txeui)->second = temp;
 
     bool discard = false;
