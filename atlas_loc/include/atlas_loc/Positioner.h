@@ -59,6 +59,11 @@ private:
     double m_initialInterval;
     Eigen::VectorXd m_initialState;
 
+    //leveling in 2d mode
+    std::vector<double> m_fixedZ;
+    std::vector<int> m_cellLevels;
+    std::map<uint64_t, int> m_anchorLevels;
+
     // outlier detection
     double m_outlierThreshold;
     double m_outlierThresholdDelta;
@@ -74,12 +79,11 @@ private:
     //Predictive Zone Selection
     bool m_pzs;
     std::vector<std::vector<uint64_t>> m_cellAnchors;
-    Eigen::MatrixXd m_zoneBounds;
-    Eigen::MatrixXd m_zoneCenters;
+    Eigen::MatrixXd m_cellBounds;
+    Eigen::MatrixXd m_cellCenters;
     int m_cellsPerZone;
 
     std::map<uint64_t, std::vector<uint64_t>> m_anchorsInZone;
-    //std::vector<vector<uint64_t>> anchorsInZone;
 
 public:
     PositionerTDOA ();

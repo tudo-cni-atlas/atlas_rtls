@@ -61,12 +61,12 @@ void PositionerTDOA::initialize(ros::NodeHandle n)
         Eigen::VectorXd cellBoundsVec = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(cellBounds.data(), cellBounds.size());
         int cellNumber = cellBoundsVec.size()/6;
 
-        m_zoneBounds.resize(cellNumber, 6);
-        m_zoneBounds.setZero();
+        m_cellBounds.resize(cellNumber, 6);
+        m_cellBounds.setZero();
 
         for(int i = 0; i < cellNumber; i++)
         {
-            m_zoneBounds.row(i) << cellBoundsVec.segment(i*6,6).transpose();
+            m_cellBounds.row(i) << cellBoundsVec.segment(i*6,6).transpose();
             ROS_INFO("PARAM Cell %d: %f, %f, %f, %f", 
                     i+1, cellBoundsVec(i*6), cellBoundsVec(i*6+1), cellBoundsVec(i*6+2), cellBoundsVec(i*6+3));
         }
@@ -78,9 +78,9 @@ void PositionerTDOA::initialize(ros::NodeHandle n)
 
             for(auto it = m_anchorPositions.begin(); it!=m_anchorPositions.end(); it++ )
             {
-                if((it->second(0) > m_zoneBounds(i,0)) && (it->second(0) < m_zoneBounds(i,1)) 
-                    && (it->second(1) > m_zoneBounds(i,2)) && (it->second(1) < m_zoneBounds(i,3))
-                    && (it->second(2) > m_zoneBounds(i,4)) && (it->second(2) < m_zoneBounds(i,5)))
+                if((it->second(0) > m_cellBounds(i,0)) && (it->second(0) < m_cellBounds(i,1)) 
+                    && (it->second(1) > m_cellBounds(i,2)) && (it->second(1) < m_cellBounds(i,3))
+                    && (it->second(2) > m_cellBounds(i,4)) && (it->second(2) < m_cellBounds(i,5)))
                 {
                     temp.push_back(it->first);
                 }
@@ -101,14 +101,14 @@ void PositionerTDOA::initialize(ros::NodeHandle n)
         }
 
         //compute cell centers
-        m_zoneCenters.resize(cellNumber,3);
-        m_zoneCenters.setZero();
+        m_cellCenters.resize(cellNumber,3);
+        m_cellCenters.setZero();
 
         for(int i = 0; i < cellNumber; i++)
         {
-            m_zoneCenters.row(i) << (m_zoneBounds(i,0)+m_zoneBounds(i,1))/2, 
-                                    (m_zoneBounds(i,2)+m_zoneBounds(i,3))/2, 
-                                    (m_zoneBounds(i,4)+m_zoneBounds(i,5))/2;
+            m_cellCenters.row(i) << (m_cellBounds(i,0)+m_cellBounds(i,1))/2, 
+                                    (m_cellBounds(i,2)+m_cellBounds(i,3))/2, 
+                                    (m_cellBounds(i,4)+m_cellBounds(i,5))/2;
         }
     }
     else
@@ -119,10 +119,50 @@ void PositionerTDOA::initialize(ros::NodeHandle n)
     if (n.hasParam("cellsPerZone"))
     {
         n.getParam("cellsPerZone", m_cellsPerZone);
+        ROS_INFO("PARAM cellsPerZone: %d", m_cellsPerZone);
     }
     else
     {
         ROS_ERROR("PARAM FAILED to get 'cellsPerZone'");
+    }
+
+    if (n.hasParam("fixedZ"))
+    {
+        n.getParam("fixedZ", m_fixedZ);
+        for(int i = 0; i < m_fixedZ.size(); i++){
+            ROS_INFO("PARAM fixedZ %d: %f", i, m_fixedZ.at(i));
+        }
+    }
+    else
+    {
+        ROS_ERROR("PARAM FAILED to get 'fixedZ'");
+    }
+
+    // Assign levels to cells    
+    for (int i = 0; i < m_cellBounds.rows(); i++)
+    {
+        int temp;
+        for(int j = 0; j < m_fixedZ.size(); j++)
+        {
+            //check if fixed z coordiante is in z-Range of cell bounds
+            if (m_cellBounds(i, 4) < m_fixedZ.at(j) && m_cellBounds(i, 5) > m_fixedZ.at(j))
+            {
+                temp = j;
+                break;
+            }
+        }
+        m_cellLevels.push_back(temp); 
+    }
+
+    //Assign levels to anchors
+    int counter = 0; 
+    for (auto it = m_cellAnchors.begin(); it != m_cellAnchors.end(); it++)
+    {
+        for(auto jt = it->begin(); jt != it->end(); jt++)
+        {
+            m_anchorLevels.insert(std::make_pair(*jt, m_cellLevels.at(counter)));
+        }
+        counter++;
     }
 
 
@@ -655,6 +695,9 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
     int row = 0;
     double referenceTOA;
 
+    //initialize level count
+    std::vector<int> levelCount(m_fixedZ.size(), 0);
+
     for (auto it = s.meas.begin(); it != s.meas.end(); ++it)
     {
         if(std::find(m_anchorsInZone[s.txeui].begin(), m_anchorsInZone[s.txeui].end(), it->first)!= m_anchorsInZone[s.txeui].end())
@@ -667,6 +710,9 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
             anchorPositions.row(row) = m_anchorPositions[it->first].transpose();
             anchorTOAs(row) = it->second.toa - referenceTOA;
             row++;
+
+            //level count
+            levelCount.at(m_anchorLevels[it->first])++;
         }
     }
 
@@ -696,6 +742,14 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
 
     // --- get ekf state for specific participant ---
     ekf_t ekf = m_ekf[s.txeui];
+
+    // estimate level in 2D mode and set to corresponding fixed z-coordinate
+    if (m_dimensions == 2)
+    {
+        int level = std::max_element(levelCount.begin(),levelCount.end()) - levelCount.begin();
+        ekf.state[2] = m_fixedZ.at(level);
+    }
+
     Eigen::VectorXd xk = ekf.state;
     Eigen::MatrixXd Pk = ekf.stateCovariance;
     // --- create dynamic state transition matrix ---
@@ -834,16 +888,16 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
     Eigen::Vector3d ppos;
     ppos = m_lastPosition[s.txeui].pos + m_lastPosition[s.txeui].dpos*interval;
 
-    int cellNumber = m_zoneBounds.size()/6;
+    int cellNumber = m_cellBounds.size()/6;
     bool isInLocArea = false;
     //cellsInZone.clear();
 
     //predicted position is located in zone x 
     for(int i = 0; i < cellNumber; i++)
     {
-        if((ppos(0) > m_zoneBounds(i,0)) && (ppos(0) < m_zoneBounds(i,1)) 
-            && (ppos(1) > m_zoneBounds(i,2)) && (ppos(1) < m_zoneBounds(i,3))
-            && (ppos(2) > m_zoneBounds(i,4)) && (ppos(2) < m_zoneBounds(i,5)))
+        if((ppos(0) > m_cellBounds(i,0)) && (ppos(0) < m_cellBounds(i,1)) 
+            && (ppos(1) > m_cellBounds(i,2)) && (ppos(1) < m_cellBounds(i,3))
+            && (ppos(2) > m_cellBounds(i,4)) && (ppos(2) < m_cellBounds(i,5)))
         {
             cellsInZone.push_back(i);
             isInLocArea = true;
@@ -868,9 +922,9 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
         {
             if (i!=cellsInZone[0])
             {
-                int dist = sqrt((ppos(0)-m_zoneCenters(i,0))*(ppos(0)-m_zoneCenters(i,0))+
-                                (ppos(1)-m_zoneCenters(i,1))*(ppos(1)-m_zoneCenters(i,1))+
-                                (ppos(2)-m_zoneCenters(i,2))*(ppos(2)-m_zoneCenters(i,2)));
+                int dist = sqrt((ppos(0)-m_cellCenters(i,0))*(ppos(0)-m_cellCenters(i,0))+
+                                (ppos(1)-m_cellCenters(i,1))*(ppos(1)-m_cellCenters(i,1))+
+                                (ppos(2)-m_cellCenters(i,2))*(ppos(2)-m_cellCenters(i,2)));
 
                 distanceToCell.push_back(std::make_pair(dist, i));
             }
