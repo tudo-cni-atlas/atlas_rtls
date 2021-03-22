@@ -165,7 +165,6 @@ void PositionerTDOA::initialize(ros::NodeHandle n)
         counter++;
     }
 
-
     // EKF Configuration
     if (n.getParam("ekf/imu", m_imu))
     {
@@ -357,6 +356,9 @@ void PositionerTDOA::initialize(ros::NodeHandle n)
 
             std::vector<uint64_t> temp;
             m_anchorsInZone.insert(std::pair<uint64_t, std::vector<uint64_t>>(tagEUI, temp));
+
+            //assign level to tag
+            m_tagLevel.insert(std::pair<uint64_t, int>(tagEUI, 0));
         }
     }
     else
@@ -734,7 +736,7 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
     }
 
     // --- threshold to reinitialize ekf ---
-    if(interval > 60.0)
+    if(interval > 5.0)
     {
         createNewEKF(s.txeui, s.hts);
         ROS_WARN(" Interval: %.6f greater threshold, reinit EKF !!!", interval);
@@ -747,6 +749,13 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
     if (m_dimensions == 2)
     {
         int level = std::max_element(levelCount.begin(),levelCount.end()) - levelCount.begin();
+
+        if(m_tagLevel[s.txeui] != level)
+        {
+            createNewEKF(s.txeui, s.hts);
+            //std::cout << "create new EKF! Level: " << level << " Previous: " << m_tagLevel[s.txeui] << std::endl; 
+        }
+        m_tagLevel[s.txeui] = level;
         ekf.state[2] = m_fixedZ.at(level);
     }
 

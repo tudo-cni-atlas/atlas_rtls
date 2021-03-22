@@ -63,6 +63,7 @@ private:
     std::vector<double> m_fixedZ;
     std::vector<int> m_cellLevels;
     std::map<uint64_t, int> m_anchorLevels;
+    std::map<uint64_t, int> m_tagLevel;
 
     // outlier detection
     double m_outlierThreshold;
