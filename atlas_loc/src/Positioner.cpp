@@ -86,7 +86,21 @@ void PositionerTDOA::initialize(ros::NodeHandle n)
                 }
             }
             m_cellAnchors.push_back(temp);
-        }                                          
+        } 
+
+        //assign cells to anchors
+        for(auto it = m_anchorPositions.begin(); it!=m_anchorPositions.end(); it++ )
+        {
+            for(int i = 0; i < cellNumber; i++)
+            {
+                if((it->second(0) > m_cellBounds(i,0)) && (it->second(0) < m_cellBounds(i,1)) 
+                    && (it->second(1) > m_cellBounds(i,2)) && (it->second(1) < m_cellBounds(i,3))
+                    && (it->second(2) > m_cellBounds(i,4)) && (it->second(2) < m_cellBounds(i,5)))
+                {
+                    m_anchorCells.insert(std::make_pair(it->first, i));
+                }
+            }
+        }
         
         //TODO: ROS_ERROR("Anchor %#lx is not part of any cell", it->first);
 
@@ -144,7 +158,7 @@ void PositionerTDOA::initialize(ros::NodeHandle n)
         int temp;
         for(int j = 0; j < m_fixedZ.size(); j++)
         {
-            //check if fixed z coordiante is in z-Range of cell bounds
+            //check if fixed z coordinate is in z-Range of cell bounds
             if (m_cellBounds(i, 4) < m_fixedZ.at(j) && m_cellBounds(i, 5) > m_fixedZ.at(j))
             {
                 temp = j;
@@ -342,16 +356,15 @@ void PositionerTDOA::initialize(ros::NodeHandle n)
         ROS_ERROR("PARAM FAILED to get 'orientationOffset'");
     }
 
-    // Whitelist Configuration
-    if (n.hasParam("whitelist"))
+    //EUI Configuration
+    XmlRpc::XmlRpcValue fastKeys;
+    n.getParam("/atlas/fast", fastKeys);
+    ROS_ASSERT(fastKeys.getType() == XmlRpc::XmlRpcValue::TypeStruct);
+    for(XmlRpc::XmlRpcValue::ValueStruct::const_iterator it = fastKeys.begin(); it != fastKeys.end(); it++)
     {
-        std::vector<std::string> whitelist;
-        n.getParam("whitelist", whitelist);
-
-        for (auto it = whitelist.begin(); it != whitelist.end(); ++it)
-        {
-            uint64_t tagEUI = std::stoul(*it, nullptr, 16);
-            m_subSample.insert(std::make_pair(tagEUI, n.subscribe("/atlas/" + *it + "/sample", 100, &PositionerTDOA::sampleCallback, this)));
+        if(n.hasParam("/atlas/fast/" + it->first + "/enable")){
+            uint64_t tagEUI = std::stoul(it->first, nullptr, 16);
+            m_subSample.insert(std::make_pair(tagEUI, n.subscribe("/atlas/" + it->first + "/sample", 100, &PositionerTDOA::sampleCallback, this)));
             ROS_INFO("PARAM add tag on whitelist: %#lx", (uint64_t)tagEUI);
 
             std::vector<uint64_t> temp;
@@ -360,11 +373,7 @@ void PositionerTDOA::initialize(ros::NodeHandle n)
             //assign level to tag
             m_tagLevel.insert(std::pair<uint64_t, int>(tagEUI, 0));
         }
-    }
-    else
-    {
-        ROS_ERROR("PARAM FAILED to get 'whitelist'");
-    }
+    } 
 }
 
 void PositionerTDOA::sampleCallback(const atlas_msgs::Sample& msg)
@@ -405,9 +414,15 @@ void PositionerTDOA::extractSamples(std::vector<sample_t> *samples)
 
 void PositionerTDOA::createNewEKF(uint64_t eui, ros::Time ts)
 {
+    //get init state (center of tagCell)
+    Eigen::VectorXd initState(6);
+    initState.head(3) = m_cellCenters.row(m_tagCell.at(eui)).transpose();
+    initState.tail(3) << 0,0,0;
+    
     ekf_t ekf;
     ekf.lastUpdate = ts;
-    ekf.state = m_initialState;
+    //ekf.state = m_initialState;
+    ekf.state = initState;
     ekf.imu = m_imu;
     ekf.sqd = m_sqd;
     ekf.constrained = m_constrained;
@@ -643,13 +658,13 @@ bool PositionerTDOA::calculatePositionEKF(const sample_t &s, position_t *p)
 
             if(diff > m_outlierThresholdDelta)
             {
-                ROS_WARN(" Outlier: TDOA diff %#lx,%#lx, exceeded d: %.2f", s.txeui, it->first, diff);
+                //ROS_WARN(" Outlier: TDOA diff %#lx,%#lx, exceeded d: %.2f", s.txeui, it->first, diff);
                 discard = true;
             }
 
             if(tdoa > m_outlierThreshold || tdoa < -m_outlierThreshold)
             {
-                ROS_WARN(" Outlier: TDOA large %#lx,%#lx, exceeded threshold: %.2f", s.txeui, it->first, tdoa);
+                //ROS_WARN(" Outlier: TDOA large %#lx,%#lx, exceeded threshold: %.2f", s.txeui, it->first, tdoa);
                 discard = true;
             }
         }
@@ -688,7 +703,7 @@ bool PositionerTDOA::calculatePositionEKF(const sample_t &s, position_t *p)
     return true;
 }
 
-bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position_t *p, int count)
+bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position_t *p, int count, int level)
 {   
     Eigen::MatrixXd anchorPositions(count, 3);
     Eigen::VectorXd anchorTOAs(count);
@@ -696,9 +711,6 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
     // extracting the tdoa from selected anchors only, choose reference TOA
     int row = 0;
     double referenceTOA;
-
-    //initialize level count
-    std::vector<int> levelCount(m_fixedZ.size(), 0);
 
     for (auto it = s.meas.begin(); it != s.meas.end(); ++it)
     {
@@ -712,9 +724,6 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
             anchorPositions.row(row) = m_anchorPositions[it->first].transpose();
             anchorTOAs(row) = it->second.toa - referenceTOA;
             row++;
-
-            //level count
-            levelCount.at(m_anchorLevels[it->first])++;
         }
     }
 
@@ -742,20 +751,18 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
         ROS_WARN(" Interval: %.6f greater threshold, reinit EKF !!!", interval);
     }
 
+    // set fixed z-coordinate based on level 
+    if(m_tagLevel[s.txeui] != level)
+    {
+        createNewEKF(s.txeui, s.hts);
+        std::cout << "create new EKF! Level: " << level << " Previous: " << m_tagLevel[s.txeui] << std::endl; 
+    }
+
     // --- get ekf state for specific participant ---
     ekf_t ekf = m_ekf[s.txeui];
 
-    // estimate level in 2D mode and set to corresponding fixed z-coordinate
     if (m_dimensions == 2)
     {
-        int level = std::max_element(levelCount.begin(),levelCount.end()) - levelCount.begin();
-
-        if(m_tagLevel[s.txeui] != level)
-        {
-            createNewEKF(s.txeui, s.hts);
-            //std::cout << "create new EKF! Level: " << level << " Previous: " << m_tagLevel[s.txeui] << std::endl; 
-        }
-        m_tagLevel[s.txeui] = level;
         ekf.state[2] = m_fixedZ.at(level);
     }
 
@@ -858,13 +865,15 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
     ekf.state = xk;
     ekf.stateCovariance = Pk;
 
+    //std::cout << ekf.state[0] << " : " << ekf.state[1] << " : " << ekf.state[2] << std::endl;
+
     // constrain min max
-    if(ekf.state[0]<m_minX) ekf.state[0]=m_minX;// return false;
-    if(ekf.state[1]<m_minY) ekf.state[1]=m_minY;// return false;
-    if(ekf.state[2]<m_minZ) ekf.state[2]=m_minZ;// return false;
-    if(ekf.state[0]>m_maxX) ekf.state[0]=m_maxX;// return false;
-    if(ekf.state[1]>m_maxY) ekf.state[1]=m_maxY;// return false;
-    if(ekf.state[2]>m_maxZ) ekf.state[2]=m_maxZ;// return false;
+    if(ekf.state[0]<m_minX) {ekf.state[0]=m_minX; ekf.state[3]=0;}// return false;
+    if(ekf.state[1]<m_minY) {ekf.state[1]=m_minY; ekf.state[4]=0;}// return false;
+    if(ekf.state[2]<m_minZ) {ekf.state[2]=m_minZ; ekf.state[5]=0;}// return false;
+    if(ekf.state[0]>m_maxX) {ekf.state[0]=m_maxX; ekf.state[3]=0;}// return false;
+    if(ekf.state[1]>m_maxY) {ekf.state[1]=m_maxY; ekf.state[4]=0;}// return false;
+    if(ekf.state[2]>m_maxZ) {ekf.state[2]=m_maxZ; ekf.state[5]=0;}// return false;
 
     // if(ekf.state[0]<m_minX) return false;
     // if(ekf.state[1]<m_minY) return false;
@@ -883,10 +892,32 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
 
 bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p)
 {
-    std::vector<int> cellsInZone;
-    //std::vector<uint64_t> anchorsInZone;
+    bool discard = false;
 
-    //calculate predicted position
+    //initialize level count
+    std::vector<int> measPerLevel(m_fixedZ.size(), 0);
+    std::vector<int> measPerCell(m_cellAnchors.size(), 0);
+
+    for (auto it = s.meas.begin(); it != s.meas.end(); ++it)
+    {
+        //how many measurements from level x
+        measPerLevel.at(m_anchorLevels[it->first])++;
+
+        //how many measurements from cell x
+        measPerCell.at(m_anchorCells[it->first])++;
+    }
+
+    // estimate level with most measurements
+    int level = std::max_element(measPerLevel.begin(),measPerLevel.end()) - measPerLevel.begin();
+    m_tagLevel[s.txeui] = level;
+
+    // estimate cell with most measurements
+    int initCell = std::max_element(measPerCell.begin(),measPerCell.end()) - measPerCell.begin();
+    m_tagCell[s.txeui] = initCell;
+
+    std::vector<int> cellsInZone;
+
+    //compute predicted position
     double interval = 0;
 
     if(m_lastPosition.find(p->eui) != m_lastPosition.end())
@@ -895,13 +926,25 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
     }
 
     Eigen::Vector3d ppos;
-    ppos = m_lastPosition[s.txeui].pos + m_lastPosition[s.txeui].dpos*interval;
 
+    if(interval > 3.0){
+        ppos << -1,-1,-1;
+    }
+    else
+    {
+        ppos = m_lastPosition[s.txeui].pos + m_lastPosition[s.txeui].dpos*interval;
+    }
+
+    //set predicted z-coordinate to fixed z in 2D mode 
+    if (m_dimensions == 2)
+    {
+        ppos[2] = m_fixedZ.at(level);
+    }
+    
     int cellNumber = m_cellBounds.size()/6;
     bool isInLocArea = false;
-    //cellsInZone.clear();
 
-    //predicted position is located in zone x 
+    //predicted position is located in cell x 
     for(int i = 0; i < cellNumber; i++)
     {
         if((ppos(0) > m_cellBounds(i,0)) && (ppos(0) < m_cellBounds(i,1)) 
@@ -929,7 +972,8 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
     {
         for(int i = 0; i < cellNumber; i++)
         {
-            if (i!=cellsInZone[0])
+            //exclude already chosen cell and cells with no measurement
+            if (i!=cellsInZone[0] && measPerCell[i]!=0)
             {
                 int dist = sqrt((ppos(0)-m_cellCenters(i,0))*(ppos(0)-m_cellCenters(i,0))+
                                 (ppos(1)-m_cellCenters(i,1))*(ppos(1)-m_cellCenters(i,1))+
@@ -938,22 +982,23 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
                 distanceToCell.push_back(std::make_pair(dist, i));
             }
         }
-
-        sort(distanceToCell.begin(), distanceToCell.end());
-
-        for(int i = 0; i < m_cellsPerZone-1; i++)
+        if(!distanceToCell.empty())
         {
-            cellsInZone.push_back(distanceToCell[i].second);
-        }
-    }
+            sort(distanceToCell.begin(), distanceToCell.end());
 
+            for(int i = 0; i < m_cellsPerZone-1; i++)
+            {
+                cellsInZone.push_back(distanceToCell[i].second);
+            }
+        }
+
+    }
     // for(auto it = cellsInZone.begin(); it != cellsInZone.end(); it++){
-    //     std::cout << *it << std::endl;
+    //    std::cout << *it << std::endl;
     // }
 
     //count only measurements of anchors chosen by Predictive Zone Selection
     int count = 0;
-    //anchorsInZone.clear();
 
     std::vector<uint64_t> temp;
     for (auto it = s.meas.begin(); it != s.meas.end(); ++it)
@@ -963,7 +1008,6 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
             if(std::find(m_cellAnchors[cellsInZone[i]].begin(), m_cellAnchors[cellsInZone[i]].end(), 
                         it->first)!= m_cellAnchors[cellsInZone[i]].end())                          
             {
-                //std::cout << std::hex << it->first << std::endl;
                 count++;
                 temp.push_back(it->first);
             }
@@ -972,16 +1016,15 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
 
     m_anchorsInZone.find(s.txeui)->second = temp;
 
-    bool discard = false;
     if(temp.empty())
     {
         discard = true;
         return false;
     }
 
-    // for(auto it = anchorsInZone.begin(); it != anchorsInZone.end(); it++){
+    //for(auto it = anchorsInZone.begin(); it != anchorsInZone.end(); it++){
     //     std::cout << "................" << std::endl << std::hex << *it << std::endl;
-    // }
+    //}
 
     if(m_ekf.find(s.txeui) == m_ekf.end())
     {
@@ -1043,13 +1086,13 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
 
                 if(diff > m_outlierThresholdDelta)
                 {
-                    ROS_WARN(" Outlier: TDOA diff %#lx,%#lx, exceeded d: %.2f", s.txeui, it->first, diff);
+                    //ROS_WARN(" Outlier: TDOA diff %#lx,%#lx, exceeded d: %.2f", s.txeui, it->first, diff);
                     discard = true;
                 }
 
                 if(tdoa > m_outlierThreshold || tdoa < -m_outlierThreshold)
                 {
-                    ROS_WARN(" Outlier: TDOA large %#lx,%#lx, exceeded threshold: %.2f", s.txeui, it->first, tdoa);
+                    //ROS_WARN(" Outlier: TDOA large %#lx,%#lx, exceeded threshold: %.2f", s.txeui, it->first, tdoa);
                     discard = true;
                 }
             }
@@ -1059,7 +1102,7 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
 
     if(!discard)
     {
-        if(!calculatePositionEKFInnerZoning(s, p, count))
+        if(!calculatePositionEKFInnerZoning(s, p, count, level))
         {
             discard = true;
             discard_counter++;

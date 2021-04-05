@@ -49,7 +49,7 @@ private:
     bool m_imu;
     bool m_sqd;
     bool m_constrained;
-    int m_minAnchor = 3;
+    int m_minAnchor = 6;
     double m_minX, m_maxX, m_minY, m_maxY, m_minZ, m_maxZ;
     int m_dimensions;
     double m_processNoise;
@@ -80,10 +80,12 @@ private:
     //Predictive Zone Selection
     bool m_pzs;
     std::vector<std::vector<uint64_t>> m_cellAnchors;
+    std::map<uint64_t, int> m_anchorCells;
     Eigen::MatrixXd m_cellBounds;
     Eigen::MatrixXd m_cellCenters;
     int m_cellsPerZone;
 
+    std::map<uint64_t, int> m_tagCell;
     std::map<uint64_t, std::vector<uint64_t>> m_anchorsInZone;
 
 public:
@@ -98,7 +100,7 @@ public:
     bool calculatePositionEKF(const sample_t &s, position_t *p);
 
     //Predictive Zone Selection
-    bool calculatePositionEKFInnerZoning(const sample_t &s, position_t *p, int count);
+    bool calculatePositionEKFInnerZoning(const sample_t &s, position_t *p, int count, int level);
     bool calculatePositionEKFZoning(const sample_t &s, position_t *p);
 };
 
