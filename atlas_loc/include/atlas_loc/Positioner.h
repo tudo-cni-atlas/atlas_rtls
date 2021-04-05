@@ -64,6 +64,7 @@ private:
     std::vector<int> m_cellLevels;
     std::map<uint64_t, int> m_anchorLevels;
     std::map<uint64_t, int> m_tagLevel;
+    std::map<uint64_t, int> m_prevTagLevel;
 
     // outlier detection
     double m_outlierThreshold;
@@ -100,7 +101,7 @@ public:
     bool calculatePositionEKF(const sample_t &s, position_t *p);
 
     //Predictive Zone Selection
-    bool calculatePositionEKFInnerZoning(const sample_t &s, position_t *p, int count, int level);
+    bool calculatePositionEKFInnerZoning(const sample_t &s, position_t *p, int count);
     bool calculatePositionEKFZoning(const sample_t &s, position_t *p);
 };
 

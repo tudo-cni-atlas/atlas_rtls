@@ -372,6 +372,7 @@ void PositionerTDOA::initialize(ros::NodeHandle n)
 
             //assign level to tag
             m_tagLevel.insert(std::pair<uint64_t, int>(tagEUI, 0));
+            m_prevTagLevel.insert(std::pair<uint64_t, int>(tagEUI, 0));
         }
     } 
 }
@@ -703,7 +704,7 @@ bool PositionerTDOA::calculatePositionEKF(const sample_t &s, position_t *p)
     return true;
 }
 
-bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position_t *p, int count, int level)
+bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position_t *p, int count)
 {   
     Eigen::MatrixXd anchorPositions(count, 3);
     Eigen::VectorXd anchorTOAs(count);
@@ -752,18 +753,20 @@ bool PositionerTDOA::calculatePositionEKFInnerZoning(const sample_t &s, position
     }
 
     // set fixed z-coordinate based on level 
-    if(m_tagLevel[s.txeui] != level)
+    if(m_tagLevel[s.txeui] != m_prevTagLevel[s.txeui])
     {
         createNewEKF(s.txeui, s.hts);
-        std::cout << "create new EKF! Level: " << level << " Previous: " << m_tagLevel[s.txeui] << std::endl; 
+        std::cout << "create new EKF! Level: " << m_tagLevel[s.txeui] << " Previous: " << m_prevTagLevel[s.txeui] << std::endl; 
     }
+
+    m_prevTagLevel[s.txeui] = m_tagLevel[s.txeui];
 
     // --- get ekf state for specific participant ---
     ekf_t ekf = m_ekf[s.txeui];
 
     if (m_dimensions == 2)
     {
-        ekf.state[2] = m_fixedZ.at(level);
+        ekf.state[2] = m_fixedZ.at(m_tagLevel[s.txeui]);
     }
 
     Eigen::VectorXd xk = ekf.state;
@@ -997,6 +1000,8 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
     //    std::cout << *it << std::endl;
     // }
 
+    // std::cout << "....." << std::endl;
+
     //count only measurements of anchors chosen by Predictive Zone Selection
     int count = 0;
 
@@ -1102,7 +1107,7 @@ bool PositionerTDOA::calculatePositionEKFZoning(const sample_t &s, position_t *p
 
     if(!discard)
     {
-        if(!calculatePositionEKFInnerZoning(s, p, count, level))
+        if(!calculatePositionEKFInnerZoning(s, p, count))
         {
             discard = true;
             discard_counter++;
