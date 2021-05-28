@@ -92,17 +92,17 @@ private:
 public:
     PositionerTDOA ();
 
-    void initialize(ros::NodeHandle n);
+    void initialize(ros::NodeHandle n, bool pzs);
     void extractSamples(std::vector<sample_t> *samples);
 
-    void createNewEKF(uint64_t eui, ros::Time ts);
-    bool calculatePositionEKFInner(const sample_t &s, position_t *p);
+    void createNewEKF(uint64_t eui, ros::Time ts, bool pzs);
+    //bool calculatePositionEKFInner(const sample_t &s, position_t *p, bool pzs);
     bool calculatePositionEKFConstraints(const sample_t &s, position_t *p);
-    bool calculatePositionEKF(const sample_t &s, position_t *p);
+    //bool calculatePositionEKF(const sample_t &s, position_t *p, bool pzs);
 
     //Predictive Zone Selection
-    bool calculatePositionEKFInnerZoning(const sample_t &s, position_t *p, int count);
-    bool calculatePositionEKFZoning(const sample_t &s, position_t *p);
+    bool calculatePositionEKFInner(const sample_t &s, position_t *p, int count, bool pzs);
+    bool calculatePositionEKF(const sample_t &s, position_t *p, bool pzs);
 };
 
 #endif /* defined(__atlas__tdoa__) */

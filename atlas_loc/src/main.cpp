@@ -36,14 +36,14 @@ int main(int argc, char **argv)
     ros::NodeHandle n("~");
     ros::Rate rate(2400);
 
+    bool pzs = false;
+    n.getParam("pzs", pzs);
+
     Reporter rep;
     rep.initialize(n);
 
     PositionerTDOA pos;
-    pos.initialize(n);
-
-    bool pzs;
-    n.getParam("pzs", pzs);
+    pos.initialize(n, pzs);
 
     while (ros::ok())
     {
@@ -54,19 +54,10 @@ int main(int argc, char **argv)
         {
             sample_t s = *it;
             position_t p;
-            if(pzs)
+
+            if(pos.calculatePositionEKF(s, &p, pzs))
             {
-                if(pos.calculatePositionEKFZoning(s, &p))
-                {
-                    rep.reportPosition(p);
-                }
-            }
-            else
-            {
-                if(pos.calculatePositionEKF(s, &p))
-                {
-                    rep.reportPosition(p);
-                }
+                rep.reportPosition(p);
             }
         }
 

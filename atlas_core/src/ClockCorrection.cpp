@@ -276,7 +276,6 @@ void ClockCorrection::initialize(ros::NodeHandle n)
             m_fastSyncMasterEUI.push_back(it->first);
             auto itr = std::find(m_verticeEui.begin(), m_verticeEui.end(), it->first);
             m_syncMasterVertice = std::distance(m_verticeEui.begin(), itr);
-            std::cout << "Tree root: " << std::hex << it->first << "..."<< std::endl;
 
             //assign each anchor to its respective reference sync master
             std::vector<uint64_t> v;
@@ -335,9 +334,17 @@ void ClockCorrection::initialize(ros::NodeHandle n)
         }
     }
 
-    n.getParam("/atlas/dbld", m_dbld);
-
-    if(m_dbld == true){
+    if (n.hasParam("/atlas/dbld"))
+    {
+        n.getParam("/atlas/dbld", m_dbld);
+    }
+    else 
+    {
+        m_dbld = false;
+    }
+    
+    if(m_dbld)
+    {
         ROS_INFO("Best Link Discovery Initialized");
         m_pathSet=false;
         m_startTimeSet=false;
@@ -421,7 +428,7 @@ void ClockCorrection::processSample(sample_t sample)
     // Correct TOA message from positioning node
     else
     {
-        //ROS_INFO(" Processing sample size %lu, seq %lu, txeui %#lx", sample.meas.size(), sample.seq, sample.txeui);
+        ROS_INFO(" Processing sample size %lu, seq %lu, txeui %#lx", sample.meas.size(), sample.seq, sample.txeui);
         if(m_dbld==true)
         {
             //ros::Duration dp = ros::Time::now() - m_lastPathUpdate;
