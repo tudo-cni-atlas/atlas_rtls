@@ -10,7 +10,7 @@ This is the ATLAS Real-Time Localization System (RTLS). ATLAS is based on ultra-
 
 The source code of the localization is released under [BSD 3-Clause license](LICENSE).
 
-**Authors:** Janis Tiemann, Yehya Elmasry
+**Authors:** Janis Tiemann, Yehya Elmasry, Johannes Friedrich
 
 **Maintainer:** Janis Tiemann, janis.tiemann@tu-dortmund.de
 
