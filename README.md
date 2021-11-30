@@ -33,14 +33,13 @@ If you use this work in an academic context, please cite the following publicati
                 Month = {Dec}
         }
 
-* J. Tiemann, Y. Elmasry, L. Koring, C. Wietfeld, **ATLAS FaST: Fast and Simple Scheduled TDOA for Reliable Ultra-Wideband Localization**, In IEEE International Conference on Robotics and Automation (ICRA), Montréal, Canada, May 2019. (accepted for presentation). 
+* J. Tiemann, Y. Elmasry, L. Koring, C. Wietfeld, **ATLAS FaST: Fast and Simple Scheduled TDOA for Reliable Ultra-Wideband Localization**, In IEEE International Conference on Robotics and Automation (ICRA), Montréal, Canada, May 2019. 
 
         @InProceedings{Tiemann2019atlasfast,
                 Author = {Janis Tiemann and Yehya Elmasry and Lucas Koring and Christian Wietfeld},
                 Title = {ATLAS FaST: Fast and Simple Scheduled TDOA for Reliable Ultra-Wideband Localization},
                 Booktitle = {IEEE International Conference on Robotics and Automation (ICRA)},
                 Year = {2019},
-                Publishingstatus = {accepted for presentation},
                 Address = {Montréal, Canada},
                 Month = {May}
         }
